@@ -52,7 +52,7 @@ app.layout = html.Div(
                 ),
                 html.Button('Graph Type', id='open-modal-button'),
                 html.Button('Download Data', id='download-data-button'),
-                dcc.Download(id="download-data"),
+                
             ]
         ),
         dcc.Graph(id='line-plot', className='graph-container'),
@@ -83,6 +83,7 @@ app.layout = html.Div(
                 ),
             ]
         ),
+        dcc.Download(id="download-data"),
     ]
 )
 
@@ -106,6 +107,9 @@ def download_data(n_clicks, selected_series, selected_time, graph_type):
     if graph_type != 'pie':
         csv_string = filtered_df.to_csv(index=False, encoding='utf-8')
     else:
+        pie_data = filtered_df[filtered_df['Series_reference'] == selected_series[0]]
+        labels = pie_data['Period'].tolist()
+        values = pie_data['Data_value'].tolist()
         csv_string = pd.DataFrame({'Labels': labels, 'Values': values}).to_csv(index=False, encoding='utf-8')
 
     return dcc.send_data_frame(filtered_df.to_csv, filename="downloaded_data.csv", index=False)
