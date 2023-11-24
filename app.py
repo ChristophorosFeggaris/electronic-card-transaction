@@ -3,8 +3,9 @@ from dash import dcc, html, State
 from dash.dependencies import Input, Output
 import pandas as pd
 from dash.exceptions import PreventUpdate
-from dash_extensions import Download
-from dash_extensions.snippets import send_data_frame
+from urllib.parse import quote
+
+
 
 
 # Read the CSV data
@@ -50,7 +51,8 @@ app.layout = html.Div(
                     className='range-slider'
                 ),
                 html.Button('Graph Type', id='open-modal-button'),
-                html.A(html.Button('Download Data', id='download-data-button'), id='download-link'),
+                html.Button('Download Data', id='download-data-button'),
+                dcc.Download(id="download-data"),
             ]
         ),
         dcc.Graph(id='line-plot', className='graph-container'),
@@ -83,6 +85,30 @@ app.layout = html.Div(
         ),
     ]
 )
+
+@app.callback(
+    Output('download-data', 'data'),
+    [Input('download-data-button', 'n_clicks')],
+    [State('series-dropdown', 'value'),
+     State('time-slider', 'value'),
+     State('graph-type-dropdown', 'value')],
+)
+def download_data(n_clicks, selected_series, selected_time, graph_type):
+    if n_clicks is None:
+        raise PreventUpdate
+
+    filtered_df = df[
+        (df['Series_reference'].isin(selected_series)) &
+        (df['Period'] >= selected_time[0]) &
+        (df['Period'] <= selected_time[1])
+    ]
+
+    if graph_type != 'pie':
+        csv_string = filtered_df.to_csv(index=False, encoding='utf-8')
+    else:
+        csv_string = pd.DataFrame({'Labels': labels, 'Values': values}).to_csv(index=False, encoding='utf-8')
+
+    return dcc.send_data_frame(filtered_df.to_csv, filename="downloaded_data.csv", index=False)
 @app.callback(
     Output('modal', 'style'),
     [Input('open-modal-button', 'n_clicks'),
@@ -165,34 +191,31 @@ def update_graph(selected_series, selected_time, graph_type):
 
     return fig
 
-@app.callback(
-    Output('download-link', 'href'),
-    [Input('line-plot', 'relayoutData')],
-    prevent_initial_call=True
-)
-@app.callback(
-    Output('download-link', 'href'),
-    [Input('line-plot', 'relayoutData')],
-    prevent_initial_call=True
-)
-def download_data(relayout_data):
-    if not relayout_data or 'xaxis.range[0]' not in relayout_data:
-        raise PreventUpdate
 
-    x_range = [relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']]
-    filtered_df = df[
-        (df['Series_reference'].isin(selected_series)) &
-        (df['Period'] >= x_range[0]) &
-        (df['Period'] <= x_range[1])
-    ]
+# @app.callback(
+#     Output('download-data-button', 'href'),
+#     [Input('series-dropdown', 'value'),
+#      Input('time-slider', 'value'),
+#      Input('graph-type-dropdown', 'value')],
+# )
+# def download_data(selected_series, selected_time, graph_type):
+#     filtered_df = df[
+#         (df['Series_reference'].isin(selected_series)) &
+#         (df['Period'] >= selected_time[0]) &
+#         (df['Period'] <= selected_time[1])
+#     ]
 
-    # Create a CSV string from the filtered data
-    csv_string = filtered_df.to_csv(index=False, encoding='utf-8')
+#     if graph_type != 'pie':
+#         csv_string = filtered_df.to_csv(index=False, encoding='utf-8')
+#     else:
+#         csv_string = pd.DataFrame({'Labels': labels, 'Values': values}).to_csv(index=False, encoding='utf-8')
+
+#     href = "data:text/csv;charset=utf-8," + quote(csv_string)
+#     return href
+
+
+
     
-    # Create a data URI for downloading the CSV
-    href = f'data:text/csv;charset=utf-8,{quote(csv_string)}'
-
-    return href
 
 if __name__ == '__main__':
     app.run_server(debug=True)
