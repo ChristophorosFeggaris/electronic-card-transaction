@@ -3,6 +3,9 @@ from dash import dcc, html, State
 from dash.dependencies import Input, Output
 import pandas as pd
 from dash.exceptions import PreventUpdate
+from dash_extensions import Download
+from dash_extensions.snippets import send_data_frame
+
 
 # Read the CSV data
 df = pd.read_csv('electronic-card-transactions-october-2023-csv-tables.csv')  
@@ -42,11 +45,12 @@ app.layout = html.Div(
                     marks={i: str(i) for i in range(int(df['Period'].min()), int(df['Period'].max()) + 1)},
                     min=df['Period'].min(),
                     max=df['Period'].max(),
-                    step=0.01,
+                    step=1,
                     value=[df['Period'].min(), df['Period'].max()],
                     className='range-slider'
                 ),
-                html.Button('Select Graph Type', id='open-modal-button'),
+                html.Button('Graph Type', id='open-modal-button'),
+                html.A(html.Button('Download Data', id='download-data-button'), id='download-link'),
             ]
         ),
         dcc.Graph(id='line-plot', className='graph-container'),
@@ -68,7 +72,6 @@ app.layout = html.Div(
                                 {'label': 'Pie Chart', 'value': 'pie'},
                                 {'label': 'Area Chart', 'value': 'area'},
                                 {'label': 'Scatter Chart', 'value': 'scatter'},
-                                # Add more graph types as needed
                             ],
                             value='line',
                             clearable=False,
@@ -80,8 +83,6 @@ app.layout = html.Div(
         ),
     ]
 )
-
-# Toggle modal callback
 @app.callback(
     Output('modal', 'style'),
     [Input('open-modal-button', 'n_clicks'),
@@ -89,7 +90,7 @@ app.layout = html.Div(
     prevent_initial_call=True
 )
 def toggle_modal(open_clicks, close_clicks):
-    if open_clicks is None and close_clicks is None:
+    if open_clicks is None:
         raise PreventUpdate
 
     ctx = dash.callback_context
@@ -98,7 +99,6 @@ def toggle_modal(open_clicks, close_clicks):
     elif ctx.triggered_id == 'close-modal-button':
         return {'display': 'none'}
 
-# Update graph callback
 @app.callback(
     Output('line-plot', 'figure'),
     [Input('series-dropdown', 'value'),
@@ -165,6 +165,34 @@ def update_graph(selected_series, selected_time, graph_type):
 
     return fig
 
-# Run the app
+@app.callback(
+    Output('download-link', 'href'),
+    [Input('line-plot', 'relayoutData')],
+    prevent_initial_call=True
+)
+@app.callback(
+    Output('download-link', 'href'),
+    [Input('line-plot', 'relayoutData')],
+    prevent_initial_call=True
+)
+def download_data(relayout_data):
+    if not relayout_data or 'xaxis.range[0]' not in relayout_data:
+        raise PreventUpdate
+
+    x_range = [relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']]
+    filtered_df = df[
+        (df['Series_reference'].isin(selected_series)) &
+        (df['Period'] >= x_range[0]) &
+        (df['Period'] <= x_range[1])
+    ]
+
+    # Create a CSV string from the filtered data
+    csv_string = filtered_df.to_csv(index=False, encoding='utf-8')
+    
+    # Create a data URI for downloading the CSV
+    href = f'data:text/csv;charset=utf-8,{quote(csv_string)}'
+
+    return href
+
 if __name__ == '__main__':
     app.run_server(debug=True)
